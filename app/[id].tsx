@@ -1,14 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 
-import { api } from '@/services/api';
+import { api } from '@/services/api'; // getOrderDetail'in burada olduğunu varsayıyoruz
 import { Colors } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { fontPixel } from '@/utils/responsive';
 import { Ionicons } from '@expo/vector-icons';
-// import OrderDetailModal from '@/components/orders/OrderDetailModal'; // Modal'ı daha sonra entegre edebiliriz
+import OrderDetailModal, { BackendOrderDetail } from '@/components/orders/OrderDetailModal'; // Modal import edildi
 
 // --- TİP TANIMLAMALARI ---
 interface StoreOrder {
@@ -32,7 +32,7 @@ interface PaginationData {
 export default function StoreOrdersScreen() {
     const { id: storeId } = useLocalSearchParams<{ id: string }>();
     
-    // GÜNCELLENMİŞ STATE'LER
+    // LİSTE STATE'LERİ
     const [orders, setOrders] = useState<StoreOrder[]>([]);
     const [summary, setSummary] = useState<SummaryData | null>(null);
     const [pagination, setPagination] = useState<PaginationData | null>(null);
@@ -40,12 +40,18 @@ export default function StoreOrdersScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // --- GÜNCELLENMİŞ MODAL STATE'LERİ ---
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null); // Adı daha açıklayıcı
+    const [orderDetail, setOrderDetail] = useState<BackendOrderDetail | null>(null); // Tipi güncellendi
+    const [isModalLoading, setIsModalLoading] = useState(false);
+    // ---
+
     const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
     const fetchStoreOrders = useCallback(async (pageNum = 1, isRefresh = false) => {
         if (!storeId) return;
         
-        // Yüklenme durumlarını yönet
         if (pageNum === 1 && !isRefresh) setIsLoading(true);
         if (isRefresh) setIsRefreshing(true);
 
@@ -58,9 +64,9 @@ export default function StoreOrdersScreen() {
                 limit: 20
             };
             
+            // Backend'den 'api.getOrdersForStore' metodunu çağırdığını varsayıyoruz
             const response = await api.getOrdersForStore(storeId, filters);
             
-            // Verileri state'e ata
             if (pageNum === 1) {
                 setOrders(response.data || []);
             } else {
@@ -77,9 +83,37 @@ export default function StoreOrdersScreen() {
         }
     }, [storeId]);
 
+    // --- YENİ: SİPARİŞ DETAYINI ÇEKME FONKSİYONU ---
+    const fetchOrderDetail = async (packageId: string, sId: string) => {
+        setIsModalLoading(true);
+        setOrderDetail(null); // Önceki detayı temizle
+        try {
+            // api.getOrderDetail (storeId ve packageId bekliyor)
+            const responseData = await api.getOrderDetail(sId, packageId); 
+            // Düzeltme: responseData'nın içinden 'data' alanını al
+            if (responseData && responseData.success) {
+                setOrderDetail(responseData.data); // Dönen 'formattedDetails' objesi
+            } else {
+                throw new Error(responseData.error || 'Sipariş detayı alınamadı.');
+            }
+        } catch (error) {
+            console.error(`Sipariş detayı (${packageId}) çekilirken hata:`, error);
+            // Hata yönetimi (örn: modal içinde bir hata mesajı)
+        } finally {
+            setIsModalLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        // storeId ve selectedPackageId varsa detayı çek
+        if (selectedPackageId && storeId) {
+            fetchOrderDetail(selectedPackageId, storeId);
+        }
+    }, [selectedPackageId, storeId]); // Bağımlılıklar güncellendi
+
     // Ekrana her gelindiğinde verileri yeniden çek
     useFocusEffect(useCallback(() => {
-        setPage(1); // Sayfayı sıfırla
+        setPage(1);
         fetchStoreOrders(1);
     }, [fetchStoreOrders]));
 
@@ -96,8 +130,19 @@ export default function StoreOrdersScreen() {
         }
     };
 
+    const handleOrderPress = (packageId: string) => {
+        setSelectedPackageId(packageId); // packageId'yi state'e ata
+        setIsModalVisible(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalVisible(false);
+        setSelectedPackageId(null);
+        setOrderDetail(null); // Modal kapanınca detayı temizle
+    };
+
     const renderOrderItem = ({ item }: { item: StoreOrder }) => {
-        return <OrderCard item={item} />;
+        return <OrderCard item={item} onPress={() => handleOrderPress(item._id)} />;
     };
     
     return (
@@ -127,13 +172,21 @@ export default function StoreOrdersScreen() {
                 }
                 contentContainerStyle={styles.container}
             />
+
+            {/* --- YENİ: MODAL BİLEŞENİ --- */}
+            <OrderDetailModal
+                visible={isModalVisible}
+                onClose={handleCloseModal}
+                order={orderDetail} 
+                isLoading={isModalLoading}
+            />
         </SafeAreaView>
     );
 }
 
 // --- YARDIMCI BİLEŞENLER ---
 
-// 1. Özet Bilgi Kartı
+// 1. Özet Bilgi Kartı (Değişiklik yok)
 const SummaryHeader = ({ summary, onRefresh }: { summary: SummaryData | null, onRefresh: () => void }) => (
     <>
         <View style={styles.headerRow}>
@@ -160,19 +213,19 @@ const SummaryHeader = ({ summary, onRefresh }: { summary: SummaryData | null, on
     </>
 );
 
-// 2. Sipariş Kartı
-const OrderCard = ({ item }: { item: StoreOrder }) => {
+// 2. Sipariş Kartı (onPress eklendi)
+const OrderCard = ({ item, onPress }: { item: StoreOrder, onPress: () => void }) => {
     const statusConfig: { [key: string]: { text: string, color: string } } = {
         PENDING_REDEEM: { text: 'Kullanılabilir', color: '#ffc107' },
         COMPLETED: { text: 'Kullanıldı', color: '#28a745' },
         EXPIRED: { text: 'Süresi Doldu', color: '#dc3545' },
-        // ... diğer durumlar ...
         default: { text: item.status, color: '#6c757d' }
     };
     const statusInfo = statusConfig[item.status] || statusConfig.default;
 
     return (
-        <TouchableOpacity style={styles.orderCard}>
+        // onPress buraya eklendi
+        <TouchableOpacity style={styles.orderCard} onPress={onPress}>
             <View style={styles.leftColumn}>
                 <Text style={styles.customerName}>{item.customerName}</Text>
                 <Text style={styles.orderId}>#{item.orderId.slice(-6).toUpperCase()}</Text>
@@ -187,7 +240,7 @@ const OrderCard = ({ item }: { item: StoreOrder }) => {
     );
 };
 
-// --- STİLLER ---
+// --- STİLLER (Değişiklik yok) ---
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#f4f4f4' },
     container: { paddingHorizontal: 20, paddingTop: 10 },

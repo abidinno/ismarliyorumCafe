@@ -37,10 +37,10 @@ const apiRequest = async (endpoint: string, method: 'GET' | 'POST' | 'PUT', body
     }
 };
 
+
 // Kullanacağımız API fonksiyonlarını tanımlıyoruz
 export const api = {
-    loginStore: (credentials: { email: string; password: string }) => 
-        apiRequest('/store-auth/login', 'POST', credentials),
+    loginStore: (credentials: { email: string; password: string }) => apiRequest('/store-auth/login', 'POST', credentials),
     
     getMe: () => apiRequest('/store-auth/me', 'GET'),
     
@@ -50,11 +50,15 @@ export const api = {
         return apiRequest(`/owner/stores/${storeId}/orders?${queryParams}`, 'GET');
     },
 
-     redeemOrderByCode: (redemptionCode: string) => {
+    redeemOrderByCode: (redemptionCode: string) => {
         return apiRequest(
             `/owner/redeem-order`, 
             'POST', 
             { redemptionCode }
         );
-    }
+    },
+
+    getOrderDetail: (storeId: string, packageId: string) => {
+        return apiRequest(`/owner/stores/${storeId}/orders/${packageId}`, 'GET');
+    },
 };

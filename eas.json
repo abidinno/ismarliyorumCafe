@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 7.6.0"
+    "version": ">= 7.6.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -8,7 +9,7 @@
       "distribution": "internal",
       "channel": "development",
       "android": {
-        "buildType": "apk" 
+        "buildType": "apk"
       }
     },
     "preview": {
@@ -19,7 +20,10 @@
       "channel": "production",
       "ios": {
         "autoIncrement": true
-      }
+      },
+      "buildArtifactPaths": [
+        "android/app/build/outputs/mapping/release/mapping.txt"
+      ]
     }
   },
   "submit": {
