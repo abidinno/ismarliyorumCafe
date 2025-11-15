@@ -3,7 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Bu adres, admin panelinin build edilmiş halinin API'ye bağlanacağı adres olmalı.
-const API_BASE_URL = 'https://ismarliyorum.com/api'; // Kendi sunucundaki API adresi
+const API_BASE_URL = 'https://api.ismarliyorum.com/api'; // Kendi sunucundaki API adresi
 
 // Mağaza kullanıcıları için özel bir API isteği fonksiyonu
 const apiRequest = async (endpoint: string, method: 'GET' | 'POST' | 'PUT', body?: any) => {
