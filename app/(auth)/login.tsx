@@ -79,11 +79,9 @@ export default function LoginScreen() {
                         <StyledTextInput 
                             label="Şifre"
                             value={password}
-                            onValidatedChange={(value) => setPassword(value)}
+                            onChangeText={setPassword}
                             textContentType="password"
-                            secureTextEntry
                             validationType="password"
-                            iconName="lock-closed-outline"
                         />
 
                         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -98,7 +96,7 @@ export default function LoginScreen() {
                     </View>
 
                     <View style={styles.footer}>
-                        <Text style={styles.footerText}>Yardıma mı ihtiyacın var?</Text>
+                        <Text style={styles.footerText}>Destek için ismarliyorum.com ziyaret et.</Text>
                     </View>
                 </KeyboardAvoidingView>
             </SafeAreaView>
