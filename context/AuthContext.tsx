@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../services/api';
+import { api } from '@/services/api';
 import { useRouter, useSegments } from 'expo-router';
 
 export interface Store {
@@ -60,18 +60,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<StoreUser | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Yönlendirme için gerekli hook'lar
+    const segments = useSegments();
+    const router = useRouter();
+
+    // 1. Başlangıçta Token Kontrolü
     useEffect(() => {
         const loadAuthData = async () => {
             try {
                 const storedToken = await AsyncStorage.getItem('storeAuthToken');
                 if (storedToken) {
                     setToken(storedToken);
+                    // Token varsa kullanıcı detaylarını çek
                     const response = await api.getMe();
                     setUser(response);
                 }
             } catch (e) {
                 console.error("Oturum verileri yüklenirken hata:", e);
                 await AsyncStorage.removeItem('storeAuthToken');
+                setToken(null);
+                setUser(null);
             } finally {
                 setIsLoading(false);
             }
@@ -79,20 +87,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loadAuthData();
     }, []);
 
+    // 2. Yönlendirme Mantığı (Navigation Protection)
+    useEffect(() => {
+        // Hala yükleniyorsa hiçbir şey yapma
+        if (isLoading) return;
+
+        // Şu an hangi gruptayız? (auth grubu mu, tabs grubu mu?)
+        const inAuthGroup = segments[0] === '(auth)';
+
+        if (!token && !inAuthGroup) {
+            // Durum: Token YOK ama (auth) grubunda değiliz (yani korumalı alandayız).
+            // Aksiyon: Giriş sayfasına at.
+            router.replace('/(auth)/login');
+        } else if (token && inAuthGroup) {
+            // Durum: Token VAR ama hala (auth) grubundayız (login/register ekranı).
+            // Aksiyon: Ana sayfaya at.
+            router.replace('/(tabs)');
+        }
+    }, [token, isLoading, segments]);
+
     const login = async (credentials: { email: string; password: string }) => {
         const response = await api.loginStore(credentials);
         const newToken = response.token;
+        
         setToken(newToken);
         await AsyncStorage.setItem('storeAuthToken', newToken);
+        
         // Başarılı girişten sonra hemen kullanıcı bilgilerini çek
         const userResponse = await api.getMe();
         setUser(userResponse);
+        
+        // Yönlendirme yukarıdaki useEffect tarafından otomatik yapılacak
     };
 
     const logout = async () => {
         setToken(null);
         setUser(null);
         await AsyncStorage.removeItem('storeAuthToken');
+        // Yönlendirme (/login) yukarıdaki useEffect tarafından otomatik yapılacak
     };
 
     return (

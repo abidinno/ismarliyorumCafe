@@ -1,24 +1,40 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, Store } from '@/context/AuthContext';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import IsmarliyorumLogo from '@/components/IsmarliyorumLogo';
+import { getImageUrl } from '@/utils/imageHelper';
 import { Colors } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { Ionicons } from '@expo/vector-icons';
 import { widthPixel, fontPixel } from '@/utils/responsive';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen() {
     const { user, isLoading } = useAuth();
     const router = useRouter();
 
-    // Genişliği ekran boyutuna göre ölçekle
     const responsiveLogoWidth = widthPixel(200);
-    // Genişliğe göre en/boy oranını koruyarak yüksekliği hesapla
     const responsiveLogoHeight = responsiveLogoWidth * 0.3; 
+    const insets = useSafeAreaInsets();
     
+    // --- MAĞAZA SEÇİM FONKSİYONU ---
+    const handleStoreSelect = async (storeId: string) => {
+        try {
+            // 2. SEÇİLEN MAĞAZAYI KAYDET
+            await AsyncStorage.setItem('lastSelectedStoreId', storeId);
+            
+            // Sonra sayfaya git
+            router.push(`/${storeId}`);
+        } catch (error) {
+            console.error("Mağaza seçimi kaydedilemedi:", error);
+            // Hata olsa bile yönlendirmeyi yap (Kullanıcı akışı bozulmasın)
+            router.push(`/${storeId}`);
+        }
+    };
 
     if (isLoading) {
         return <ActivityIndicator style={{ flex: 1, justifyContent: 'center' }} size="large" color={Colors.light.oneCo} />;
@@ -26,25 +42,25 @@ export default function HomeScreen() {
 
     const renderStoreItem = ({ item }: { item: Store }) => (   
         <TouchableOpacity 
-            style={styles.cardContainer} // Stil adı daha anlaşılır olması için değiştirildi
-            onPress={() => router.push(`/${item._id}`)}
+            style={styles.cardContainer}
+            // 3. FONKSİYONU BURAYA BAĞLADIK
+            onPress={() => handleStoreSelect(item._id)}
         >
             <View style={styles.topRow}>
-                <Image source={{ uri: item.coverImageUrl }} style={styles.image} />
+                <Image source={getImageUrl(item.coverImageUrl)} style={styles.image} />
                 <View style={styles.infoContainer}>
                     <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                     <Text style={styles.address} numberOfLines={2}>
                         {item.location.district}, {item.location.province}
                     </Text>
                 </View>
-                {/* YENİ: Ok ikonu eklendi */}
                 <Ionicons name="chevron-forward" size={24} color={Colors.light.icon} />
             </View>
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
             <StatusBar style="dark" />
             <View style={styles.headerContainer}>
                 <IsmarliyorumLogo 
@@ -52,7 +68,7 @@ export default function HomeScreen() {
                     width={responsiveLogoWidth} 
                     height={responsiveLogoHeight}  />
             </View>
-            <View style={styles.mainContainer}>
+            <View style={[styles.mainContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
                 <Text style={styles.welcomeText}>Hoş geldin, {user?.firstName}!</Text>
                 <Text style={styles.subText}>İşlem yapmak istediğin mağazayı seç.</Text>
                 
@@ -72,9 +88,8 @@ export default function HomeScreen() {
     );
 }
 
-// GÜNCELLEME: Stiller temizlendi ve düzenlendi
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: '#f4f4f4' },
+    safeArea: { flex: 1, backgroundColor: '#f4f4f4', paddingBottom: widthPixel(70) },
     headerContainer: {
         position: 'absolute',
         top: 0,
@@ -99,14 +114,13 @@ const styles = StyleSheet.create({
     mainContainer: {
         flex: 1,
         paddingHorizontal: 20, 
-    paddingTop:  widthPixel(100),
+        paddingTop:  widthPixel(130),
     },
     welcomeText: { fontFamily: Fonts.family.bold, fontSize: 24, marginBottom: 5 },
     subText: { fontFamily: Fonts.family.regular, fontSize: 16, color: '#666', marginBottom: 20 },
     emptyContainer: { marginTop: 50, alignItems: 'center' },
     emptyText: { fontFamily: Fonts.family.regular, fontSize: 16, color: '#888' },
 
-    // Kart Stilleri
     cardContainer: {
         backgroundColor: '#fff',
         borderRadius: 20,
@@ -128,7 +142,7 @@ const styles = StyleSheet.create({
     infoContainer: {
         flex: 1,
         marginLeft: widthPixel(12),
-        marginRight: widthPixel(8), // İkon için boşluk
+        marginRight: widthPixel(8),
         justifyContent: 'center',
     },
     name: {

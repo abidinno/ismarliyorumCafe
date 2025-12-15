@@ -51,9 +51,6 @@ function RootLayoutNav() {
     // Stack'in kendisine "screenOptions" ekleyerek, TÜM ekranların başlığını varsayılan olarak kapatıyoruz.
     <Stack screenOptions={{ headerShown: false }}>
       
-      {/* (auth) ve (tabs) grupları otomatik olarak layout'a dahil edilir. 
-          Burada ayrıca tanımlamaya gerek yok, çünkü varsayılan ayarları kullanacaklar. */}
-      
       {/* Sadece varsayılandan FARKLI bir ayara ihtiyacı olan ekranları burada belirtmemiz yeterli. */}
       <Stack.Screen 
         name="[id]" 

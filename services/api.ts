@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Bu adres, admin panelinin build edilmiş halinin API'ye bağlanacağı adres olmalı.
 const API_BASE_URL = 'https://api.ismarliyorum.com/api'; // Kendi sunucundaki API adresi
+//const API_BASE_URL = 'https://ismarliyorumapi.onrender.com/api';
 
 // Mağaza kullanıcıları için özel bir API isteği fonksiyonu
 const apiRequest = async (endpoint: string, method: 'GET' | 'POST' | 'PUT', body?: any) => {
@@ -50,11 +51,11 @@ export const api = {
         return apiRequest(`/owner/stores/${storeId}/orders?${queryParams}`, 'GET');
     },
 
-    redeemOrderByCode: (redemptionCode: string) => {
+    redeemOrderByCode: (redemptionCode: string, storeId: string) => {
         return apiRequest(
             `/owner/redeem-order`, 
             'POST', 
-            { redemptionCode }
+            { redemptionCode, storeId } // <-- storeId eklendi
         );
     },
 

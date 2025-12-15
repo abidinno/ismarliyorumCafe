@@ -1,64 +1,51 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { fontPixel } from '@/utils/responsive';
+import { getImageUrl } from '@/utils/imageHelper';
 
+// --- TİP TANIMLAMALARI (JSON ile Birebir Uyumlu) ---
 export interface BackendOrderDetail {
-    mainOrderInfo: {
+    headerInfo: {
+        orderDate: string;
         status: string;
-        note: string;
-    };
-    packageInfo: {
-        status: string;
-        redemptionCode: string;
-        storeId: string;
-    };
-    orderingUserInfo: {
-        fullName: string;
-        phone: string;
+        orderType: string;
     };
     recipientInfo: {
         fullName: string;
         phone: string;
+        note: string;
     };
-    orderTypeInfo: {
-        type: string;
-        description: string;
-    };
-    campaignInfo: {
-        isApplied: boolean;
-        name: string;
-        discountAmount: number;
-    };
-    giftInfo: {
-        isGift: boolean;
-        message: string;
-        acceptanceDeadline: string | null;
-        redemptionDeadline: string | null;
-    };
-    priceInfo: {
-        mainOrderFinalPrice: number;
-        packageSubtotal: number;
-        totalDiscount: number;
+    buyerInfo: {
+        fullName: string;
+        phone: string;
     };
     items: {
-        name: string;
+        _id: string;
+        productName: string;
+        productImage: string;
+        variant: string;
+        extras: string | null;
         quantity: number;
-        size: string;
         unitPrice: number;
-        totalPrice: number;
+        totalLinePrice: number;
     }[];
+    paymentInfo: {
+        subTotal: number;
+        discount: number;
+        finalPrice: number;
+        campaignName: string | null;
+    };
 }
-
 
 interface OrderDetailModalProps {
     visible: boolean;
     onClose: () => void;
-    order: BackendOrderDetail | null; // Tip güncellendi
-    isLoading: boolean; // isLoading eklendi
+    order: BackendOrderDetail | null;
+    isLoading: boolean;
 }
 
 // Fiyat formatlama yardımcısı
@@ -67,18 +54,18 @@ const formatPrice = (price: number = 0) => price.toFixed(2);
 // Durum (status) metinlerini ve renklerini yöneten yardımcı fonksiyon
 const getStatusInfo = (status: string): { text: string, color: string } => {
     const statusConfig: { [key: string]: { text: string, color: string } } = {
-        PENDING_REDEEM: { text: 'Kullanılabilir', color: '#ffc107' },
-        COMPLETED: { text: 'Kullanıldı', color: '#28a745' },
-        EXPIRED: { text: 'Süresi Doldu', color: '#dc3545' },
-        default: { text: status, color: '#6c757d' }
+        PENDING_REDEEM: { text: 'Kullanılabilir', color: '#b45309' }, // Sarı/Turuncu
+        PENDING_PAYMENT: { text: 'Ödeme Bekleniyor', color: '#6366f1' }, // Mor
+        COMPLETED: { text: 'Tamamlandı', color: '#15803d' }, // Yeşil
+        EXPIRED: { text: 'Süresi Doldu', color: '#b91c1c' }, // Kırmızı
+        CANCELLED: { text: 'İptal', color: '#b91c1c' },
+        default: { text: status, color: '#374151' } // Gri
     };
     return statusConfig[status] || statusConfig.default;
 };
 
-
 const OrderDetailModal = ({ visible, onClose, order, isLoading }: OrderDetailModalProps) => {
 
-    // Yükleniyor durumunu modal içinde göster
     const renderLoading = () => (
         <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.light.oneCo} />
@@ -86,97 +73,110 @@ const OrderDetailModal = ({ visible, onClose, order, isLoading }: OrderDetailMod
         </View>
     );
 
-    // Sipariş detayı render fonksiyonu
     const renderDetails = () => {
-        if (!order) return null; // Yüklenme bitti ama veri yoksa (hata durumu)
+        if (!order) return null;
 
-        const statusInfo = getStatusInfo(order.packageInfo.status);
-        const deadline = order.giftInfo.redemptionDeadline ? 
-            new Date(order.giftInfo.redemptionDeadline).toLocaleDateString('tr-TR') : 'N/A';
+        const statusInfo = getStatusInfo(order.headerInfo.status);
+        const formattedDate = new Date(order.headerInfo.orderDate).toLocaleDateString('tr-TR', {
+            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
 
         return (
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 
-                {/* Ana Bilgiler Bölümü */}
+                {/* 1. ÜST BİLGİ (Tarih ve Tip) */}
                 <View style={styles.section}>
+                    <View style={styles.headerRow}>
+                        <View>
+                             <Text style={styles.orderTypeBadge}>{order.headerInfo.orderType}</Text>
+                             <Text style={styles.dateText}>{formattedDate}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '20' }]}>
+                             <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.text}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 2. ALICI BİLGİLERİ */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Alıcı Bilgileri</Text>
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Alıcı (Müşteri):</Text>
+                        <Text style={styles.infoLabel}>Ad Soyad:</Text>
                         <Text style={styles.infoValue}>{order.recipientInfo.fullName}</Text>
                     </View>
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Alıcı Telefon:</Text>
+                        <Text style={styles.infoLabel}>Telefon:</Text>
                         <Text style={styles.infoValue}>{order.recipientInfo.phone}</Text>
                     </View>
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Sipariş Kodu:</Text>
-                        <Text style={styles.infoValue}>#{order.packageInfo.redemptionCode}</Text>
-                    </View>
+                    {/* Alıcı Notu Varsa Göster */}
+                    {order.recipientInfo.note && order.recipientInfo.note !== "Not yok." && (
+                        <View style={styles.noteContainer}>
+                             <Text style={styles.noteLabel}>Not:</Text>
+                             <Text style={styles.noteText}>{order.recipientInfo.note}</Text>
+                        </View>
+                    )}
                 </View>
 
-                {/* Durum ve Kullanım Kodu */}
-                <View style={[styles.section, styles.statusSection]}>
-                    <Text style={styles.sectionTitle}>Sipariş Durumu</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: statusInfo.color }]}>
-                        <Text style={styles.statusText}>{statusInfo.text}</Text>
-                    </View>
-                    <Text style={styles.infoLabel}>Son Kullanma Tarihi: {deadline}</Text>
-                </View>
-
-                {/* Ürün Listesi */}
+                {/* 3. ÜRÜN LİSTESİ */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Sipariş İçeriği</Text>
                     {order.items.map((item, index) => (
                         <View key={index} style={styles.productRow}>
+                            {/* Ürün Resmi */}
+                            {item.productImage ? (
+                                <Image source={getImageUrl(item.productImage)} style={styles.productImage} />
+                            ) : (
+                                <View style={[styles.productImage, { backgroundColor: '#eee' }]} />
+                            )}
+                            
                             <View style={styles.productInfo}>
-                                <Text style={styles.productName}>{item.name} ({item.size})</Text>
-                                <Text style={styles.productDetails}>{formatPrice(item.unitPrice)} TL</Text>
+                                <Text style={styles.productName}>
+                                    {item.quantity}x {item.productName}
+                                </Text>
+                                <Text style={styles.productDetails}>{item.variant}</Text>
+                                {item.extras && (
+                                    <Text style={styles.extrasText}>+ {item.extras}</Text>
+                                )}
                             </View>
-                            <Text style={styles.productQuantity}>x {item.quantity}</Text>
-                            <Text style={styles.productPrice}>{formatPrice(item.totalPrice)} TL</Text>
+                            
+                            <Text style={styles.productPrice}>{formatPrice(item.totalLinePrice)} TL</Text>
                         </View>
                     ))}
                 </View>
 
-                {/* Fiyat Özeti */}
+                {/* 4. FİYAT ÖZETİ */}
                 <View style={styles.section}>
                     <View style={styles.priceSummaryRow}>
                         <Text style={styles.priceSummaryLabel}>Ara Toplam</Text>
-                        <Text style={styles.priceSummaryValue}>{formatPrice(order.priceInfo.packageSubtotal)} TL</Text>
+                        <Text style={styles.priceSummaryValue}>{formatPrice(order.paymentInfo.subTotal)} TL</Text>
                     </View>
-                    {order.campaignInfo.isApplied && (
+                    
+                    {order.paymentInfo.discount > 0 && (
                         <View style={styles.priceSummaryRow}>
-                            <Text style={[styles.priceSummaryLabel, { color: Colors.light.oneCo }]}>İndirim ({order.campaignInfo.name})</Text>
-                            <Text style={[styles.priceSummaryValue, { color: Colors.light.oneCo }]}>- {formatPrice(order.campaignInfo.discountAmount)} TL</Text>
+                            <Text style={[styles.priceSummaryLabel, { color: Colors.light.oneCo }]}>
+                                İndirim {order.paymentInfo.campaignName ? `(${order.paymentInfo.campaignName})` : ''}
+                            </Text>
+                            <Text style={[styles.priceSummaryValue, { color: Colors.light.oneCo }]}>
+                                -{formatPrice(order.paymentInfo.discount)} TL
+                            </Text>
                         </View>
                     )}
-                    <View style={styles.priceSummaryRow}>
-                        <Text style={styles.priceSummaryLabel}>Paket Toplamı</Text>
-                        <Text style={styles.priceSummaryValue}>{formatPrice(order.priceInfo.packageSubtotal - order.campaignInfo.discountAmount)} TL</Text>
+                    
+                    <View style={[styles.priceSummaryRow, styles.totalRow]}>
+                        <Text style={styles.totalLabel}>Genel Toplam</Text>
+                        <Text style={styles.totalValue}>{formatPrice(order.paymentInfo.finalPrice)} TL</Text>
                     </View>
                 </View>
 
-                {/* Notlar */}
+                {/* 5. SİPARİŞİ VEREN (Eğer kendine sipariş değilse veya her zaman göstermek istersen) */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Sipariş Notu (Müşteri)</Text>
-                    <Text style={styles.noteText}>{order.mainOrderInfo.note || 'Sipariş notu yok.'}</Text>
-                </View>
-                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Hediye Mesajı</Text>
-                    <Text style={styles.noteText}>{order.giftInfo.message || 'Hediye mesajı yok.'}</Text>
+                    <Text style={styles.sectionTitle}>Siparişi Veren</Text>
+                    <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>{order.buyerInfo.fullName}</Text>
+                        <Text style={styles.infoValue}>{order.buyerInfo.phone}</Text>
+                    </View>
                 </View>
 
-                {/* Siparişi Veren Bilgileri */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Siparişi Veren (Gönderici)</Text>
-                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Ad Soyad:</Text>
-                        <Text style={styles.infoValue}>{order.orderingUserInfo.fullName}</Text>
-                    </View>
-                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Telefon:</Text>
-                        <Text style={styles.infoValue}>{order.orderingUserInfo.phone}</Text>
-                    </View>
-                </View>
             </ScrollView>
         );
     };
@@ -186,8 +186,8 @@ const OrderDetailModal = ({ visible, onClose, order, isLoading }: OrderDetailMod
             <SafeAreaView style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
                     <Text style={styles.modalHeaderText}>Sipariş Detayı</Text>
-                    <TouchableOpacity onPress={onClose}>
-                        <Ionicons name="close" size={fontPixel(28)} color={Colors.light.text} />
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <Ionicons name="close" size={fontPixel(28)} color="#333" />
                     </TouchableOpacity>
                 </View>
                 {isLoading ? renderLoading() : renderDetails()}
@@ -198,29 +198,57 @@ const OrderDetailModal = ({ visible, onClose, order, isLoading }: OrderDetailMod
 
 const styles = StyleSheet.create({
     modalContainer: { flex: 1, backgroundColor: '#f4f4f4' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: 'white' },
-    modalHeaderText: { fontFamily: Fonts.family.bold, fontSize: fontPixel(18) },
-    scrollContent: { padding: 16 },
+    modalHeader: { 
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+        padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' 
+    },
+    modalHeaderText: { fontFamily: Fonts.family.bold, fontSize: fontPixel(18), color: '#333' },
+    closeButton: { padding: 4 },
+    scrollContent: { padding: 16, paddingBottom: 40 },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(16), marginTop: 12 },
+    loadingText: { fontFamily: Fonts.family.regular, fontSize: fontPixel(14), marginTop: 10, color: '#666' },
+
     section: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16 },
-    statusSection: { alignItems: 'center' },
-    statusBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, marginVertical: 8 },
-    statusText: { fontFamily: Fonts.family.bold, color: 'white', fontSize: fontPixel(14) },
-    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
-    infoLabel: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(14), color: '#666' },
-    infoValue: { fontFamily: Fonts.family.regular, fontSize: fontPixel(14) },
-    sectionTitle: { fontFamily: Fonts.family.bold, fontSize: fontPixel(16), marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingBottom: 8 },
-    productRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    sectionTitle: { 
+        fontFamily: Fonts.family.bold, fontSize: fontPixel(15), marginBottom: 12, 
+        color: '#333', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingBottom: 8 
+    },
+    
+    // Header Info Styles
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    orderTypeBadge: { 
+        fontFamily: Fonts.family.bold, fontSize: fontPixel(14), color: Colors.light.oneCo, marginBottom: 4 
+    },
+    dateText: { fontFamily: Fonts.family.regular, fontSize: fontPixel(12), color: '#888' },
+    statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    statusText: { fontFamily: Fonts.family.bold, fontSize: fontPixel(12) },
+
+    // Info Rows
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    infoLabel: { fontFamily: Fonts.family.regular, color: '#666', fontSize: fontPixel(14) },
+    infoValue: { fontFamily: Fonts.family.semibold, color: '#333', fontSize: fontPixel(14) },
+
+    // Notes
+    noteContainer: { marginTop: 8, padding: 10, backgroundColor: '#f9f9f9', borderRadius: 8 },
+    noteLabel: { fontFamily: Fonts.family.bold, fontSize: fontPixel(12), color: '#555', marginBottom: 2 },
+    noteText: { fontFamily: Fonts.family.regular, fontSize: fontPixel(13), color: '#333', fontStyle: 'italic' },
+
+    // Product Row
+    productRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    productImage: { width: 48, height: 48, borderRadius: 8, marginRight: 12, backgroundColor: '#f0f0f0' },
     productInfo: { flex: 1 },
-    productName: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(14) },
-    productDetails: { fontFamily: Fonts.family.regular, color: '#888', fontSize: fontPixel(12) },
-    productQuantity: { fontFamily: Fonts.family.regular, color: '#888', marginHorizontal: 10 },
-    productPrice: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(14) },
-    priceSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-    priceSummaryLabel: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(14) },
-    priceSummaryValue: { fontFamily: Fonts.family.bold, fontSize: fontPixel(16) },
-    noteText: { fontFamily: Fonts.family.regular, fontSize: fontPixel(14), color: '#333', fontStyle: 'italic' },
+    productName: { fontFamily: Fonts.family.semibold, fontSize: fontPixel(14), color: '#333' },
+    productDetails: { fontFamily: Fonts.family.regular, fontSize: fontPixel(12), color: '#888' },
+    extrasText: { fontFamily: Fonts.family.regular, fontSize: fontPixel(11), color: '#666', marginTop: 2 },
+    productPrice: { fontFamily: Fonts.family.bold, fontSize: fontPixel(14), color: '#333' },
+
+    // Prices
+    priceSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+    priceSummaryLabel: { fontFamily: Fonts.family.regular, color: '#666', fontSize: fontPixel(14) },
+    priceSummaryValue: { fontFamily: Fonts.family.bold, color: '#333', fontSize: fontPixel(14) },
+    totalRow: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' },
+    totalLabel: { fontFamily: Fonts.family.bold, fontSize: fontPixel(16), color: '#333' },
+    totalValue: { fontFamily: Fonts.family.bold, fontSize: fontPixel(16), color: Colors.light.oneCo },
 });
 
 export default OrderDetailModal;

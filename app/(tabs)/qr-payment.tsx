@@ -3,9 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Button, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { router, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // <-- EKLENDİ
+
 import { api } from '@/services/api';
 
 import IsmarliyorumLogo from '@/components/IsmarliyorumLogo';
@@ -18,10 +21,10 @@ import { Fonts } from '@/constants/Fonts';
 import { widthPixel, fontPixel } from '@/utils/responsive';
 
 export default function QRPaymentScreen() {
+    const insets = useSafeAreaInsets();
     
     // Genişliği ekran boyutuna göre ölçekle
     const responsiveLogoWidth = widthPixel(200);
-    // Genişliğe göre en/boy oranını koruyarak yüksekliği hesapla
     const responsiveLogoHeight = responsiveLogoWidth * 0.3; 
     
     const [permission, requestPermission] = useCameraPermissions();
@@ -34,8 +37,8 @@ export default function QRPaymentScreen() {
         visible: false,
         title: '',
         message: '',
-        onConfirm: () => {}, // Onay aksiyonunu tutmak için
-        scannedData: '',    // Okunan veriyi tutmak için
+        onConfirm: () => {}, 
+        scannedData: '',    
     });
 
     const handleOpenCamera = async () => {
@@ -61,7 +64,7 @@ export default function QRPaymentScreen() {
             visible: true,
             title: 'Kod Okundu',
             message: `Okunan Kod: ${data}\nBu siparişi onaylamak istiyor musunuz?`,
-            onConfirm: () => processCode(data), // Onay butonuna basılınca ne olacağını belirle
+            onConfirm: () => processCode(data), 
             scannedData: data,
         });
     };
@@ -73,22 +76,32 @@ export default function QRPaymentScreen() {
         }
 
         setIsSubmitting(true);
-        setScanned(false); // Yeni taramalara izin ver
+        setScanned(false); 
         
         try {
-            const response = await api.redeemOrderByCode(code); 
+            // 1. Önce aktif mağaza ID'sini alıyoruz
+            const storeId = await AsyncStorage.getItem('lastSelectedStoreId');
+
+            if (!storeId) {
+                Alert.alert('Mağaza Seçimi', 'Lütfen önce Ana Sayfadan (Dashboard) işlem yapılacak mağazayı seçiniz.');
+                return;
+            }
+
+            // 2. İsteği storeId ile birlikte gönderiyoruz
+            const response = await api.redeemOrderByCode(code, storeId); 
             
-            // Başarılı olursa, detayları başarı sayfasına göndererek yönlendir
+            // Başarılı olursa başarı sayfasına yönlendir
             router.push({
                 pathname: '/(tabs)/qr/success',
                 params: { orderDetails: JSON.stringify(response.data) }
             });
 
         } catch (error: any) {
+            console.error(error);
             Alert.alert('İşlem Başarısız', error.message || 'Kod doğrulanırken bir sorun oluştu.');
         } finally {
             setIsSubmitting(false);
-            setManualCode(''); // Manuel giriş alanını temizle
+            setManualCode(''); 
         }
     };
 
@@ -96,23 +109,20 @@ export default function QRPaymentScreen() {
 
     const closeModal = () => {
         setModalContent({ ...modalContent, visible: false });
-        setScanned(false); // Modal kapandığında yeni taramalara izin ver
+        setScanned(false); 
     };
     
     if (!permission) {
-        // İzin durumu henüz kontrol ediliyorsa bir yükleme ekranı göster
         return <View />;
     }
 
-    // Kamera tarayıcı arayüzü
     if (isScannerVisible) {
         return (
             <View style={styles.fullScreen}>
-                {/* YENİ: CameraView bileşeni kullanılıyor */}
                 <CameraView
                     onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                     barcodeScannerSettings={{
-                        barcodeTypes: ["qr", "ean13"], // Okunacak barkod tipleri
+                        barcodeTypes: ["qr", "ean13"], 
                     }}
                     style={StyleSheet.absoluteFillObject}
                 />
@@ -123,9 +133,8 @@ export default function QRPaymentScreen() {
         );
     }
     
-    // Ana ekran arayüzü
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
             <StatusBar style="dark" />            
             <View style={styles.headerContainer}>
                 <IsmarliyorumLogo 
@@ -133,10 +142,9 @@ export default function QRPaymentScreen() {
                     width={responsiveLogoWidth} 
                     height={responsiveLogoHeight}  />
             </View>
-            <View style={styles.container}>
+                        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, widthPixel(120)) }]}>
                 <Text style={styles.title}>Sipariş Kodu</Text>
                 
-                {/* Kamera ile Okutma Bölümü */}
                 <TouchableOpacity style={styles.cameraButton} onPress={handleOpenCamera}>
                     <Ionicons name="camera-outline" size={60} color={Colors.light.oneCo} />
                     <Text style={styles.cameraButtonText}>Kamerayı Aç ve Okut</Text>
@@ -148,20 +156,21 @@ export default function QRPaymentScreen() {
                     <View style={styles.dividerLine} />
                 </View>
 
-                {/* Manuel Kod Girişi Bölümü */}
                 <View style={styles.manualContainer}>
                     <Text style={styles.manualLabel}>Kodu manuel olarak girin:</Text>
                     <TextInput
                         style={styles.input}
                         placeholder="ABC-123"
+                        placeholderTextColor="#ccc"
                         value={manualCode}
                         onChangeText={setManualCode}
                         autoCapitalize="characters"
                     />
                     <StyledButton
-                        title="Kodu Onayla"
+                        title={isSubmitting ? "Kontrol Ediliyor..." : "Kodu Onayla"}
                         onPress={handleManualCodeSubmit}
                         variant="primary"
+                        isLoading={isSubmitting}
                     />
                 </View>
             </View>
@@ -173,7 +182,7 @@ export default function QRPaymentScreen() {
                 primaryButton={{
                     text: 'Onayla',
                     onPress: () => {
-                        modalContent.onConfirm(); // Belirlediğimiz onay aksiyonunu çalıştır
+                        modalContent.onConfirm(); 
                         closeModal();
                     }
                 }}
@@ -212,7 +221,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 24,
-        paddingTop: widthPixel(120),
+        paddingTop: widthPixel(150),
         alignItems: 'center',
     },
     title: {

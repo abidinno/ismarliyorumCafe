@@ -3,6 +3,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, StoreUser  } from '@/context/AuthContext';
 import { StatusBar } from 'expo-status-bar';
 import IsmarliyorumLogo from '@/components/IsmarliyorumLogo';
@@ -24,6 +25,7 @@ const getRoleText = (role: StoreUser['role']) => {
 
 export default function ProfileScreen() {
     const { user, logout } = useAuth();
+    const insets = useSafeAreaInsets();
 
     // Genişliği ekran boyutuna göre ölçekle
     const responsiveLogoWidth = widthPixel(200);
@@ -38,7 +40,7 @@ export default function ProfileScreen() {
     const roleText = getRoleText(user.role);
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
             <StatusBar style="dark" />            
             <View style={styles.headerContainer}>
                 <IsmarliyorumLogo 
@@ -46,7 +48,7 @@ export default function ProfileScreen() {
                     width={responsiveLogoWidth} 
                     height={responsiveLogoHeight}  />
             </View>
-            <View style={styles.container}>
+            <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, widthPixel(120)) }]}>
                 {/* Kullanıcı Bilgi Kartı */}
                 <View style={styles.profileHeader}>
                     <UserAvatar 
@@ -105,8 +107,8 @@ const styles = StyleSheet.create({
     container: { 
         flex: 1,
         padding: 20,
-        paddingTop: widthPixel(120),
-        alignItems: 'center', // içeriği ortala
+        paddingTop: widthPixel(150),
+        alignItems: 'center',
     },
     profileHeader: {
         width: '100%',

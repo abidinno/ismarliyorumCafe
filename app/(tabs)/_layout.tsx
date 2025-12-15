@@ -2,13 +2,16 @@
 
 import { Tabs } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnasayfaIcon } from '@/components/icons/AnasayfaIcon';
 import QRButton from '@/components/QRButton';
 import { ProfilIcon } from '@/components/icons/ProfilIcon';
-import { widthPixel, fontPixel } from '@/utils/responsive';
+import { widthPixel, fontPixel, heightPixel } from '@/utils/responsive';
 
 export default function TabLayout() {
+  const { bottom } = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -17,18 +20,27 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.light.oneCo,
         tabBarInactiveTintColor: '#AEAEB2',
         tabBarStyle: {
-          height: widthPixel(70),
-          paddingTop: widthPixel(10),
-          paddingBottom: widthPixel(10),
+          position: 'absolute', // <--- KRİTİK NOKTA: Barı akıştan çıkarıp yüzdürüyoruz
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: heightPixel(70) + bottom,
+          paddingTop: heightPixel(10),
+          paddingBottom: bottom,
           backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#F0F0F0',
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
+          borderTopWidth: 0, // <--- Üstteki gri çizgiyi kaldırır
+          elevation: 0, // Android'deki default gölgeyi kaldırır (istenirse açılabilir)
+          shadowOpacity: 0, // iOS'taki default gölgeyi kaldırır (istenirse açılabilir)
         },
         tabBarLabelStyle: {
           fontSize: fontPixel(11),
-        }
+        },
+        // Arkaplanın tamamen şeffaf olduğundan emin olmak için (Bazen gerekebilir)
+        tabBarBackground: () => (
+            <View style={{ flex: 1, backgroundColor: 'transparent' }} />
+        ),
       }}>
       <Tabs.Screen
         name="index" // app/(tabs)/index.tsx dosyasını işaret eder
